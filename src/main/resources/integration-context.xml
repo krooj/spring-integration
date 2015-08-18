@@ -3,25 +3,30 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:int="http://www.springframework.org/schema/integration"
        xmlns:int-file="http://www.springframework.org/schema/integration/file"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
        xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:int-amqp="http://www.springframework.org/schema/integration/amqp"
        xsi:schemaLocation="http://www.springframework.org/schema/beans
            http://www.springframework.org/schema/beans/spring-beans.xsd
            http://www.springframework.org/schema/integration
            http://www.springframework.org/schema/integration/spring-integration.xsd
            http://www.springframework.org/schema/integration/file
            http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+           http://www.springframework.org/schema/rabbit
+           http://www.springframework.org/schema/rabbit/spring-rabbit.xsd
            http://www.springframework.org/schema/context
-           http://www.springframework.org/schema/context/spring-context.xsd">
+           http://www.springframework.org/schema/context/spring-context.xsd
+           http://www.springframework.org/schema/integration/amqp
+           http://www.springframework.org/schema/integration/amqp/spring-integration-amqp.xsd">
 
     <context:component-scan base-package="com.krooj"/>
 
     <!-- Defines a logical channel for the input messages -->
     <int:channel id="fileInputChannel"/>
 
-    <!-- Define a channel, backed by a queue, onto which to place the un-marshalled messages -->
-    <int:channel id="convertedMessageChannel">
-        <int:queue/>
-    </int:channel>
+    <int:channel id="amqpOutboundChannel"/>
+
+    <int:channel id="amqpInboundChannel"/>
 
     <int:channel id="lineItemProcessingChannel">
     </int:channel>
@@ -44,11 +49,32 @@
     </int:splitter>
 
     <int:transformer input-channel="lineItemProcessingChannel"
-                     output-channel="convertedMessageChannel"
+                     output-channel="amqpInboundChannel"
                      ref="lineItemMessageTransformer"/>
 
-    <int:service-activator ref="shoutOutService" method="handle" input-channel="convertedMessageChannel">
-        <int:poller cron="0/5 * * * * ?"/>
-    </int:service-activator>
+    <int-amqp:outbound-channel-adapter
+            channel="amqpOutboundChannel" amqp-template="amqpTemplate" exchange-name="si.test.exchange"
+            routing-key="si.test.binding" />
+
+    <int-amqp:inbound-channel-adapter
+        channel="amqpInboundChannel"
+        queue-names="si.test.queue" connection-factory="connectionFactory" />
+
+    <int:service-activator input-channel="amqpInboundChannel" ref="shoutOutService" method="handle"/>
+
+    <!-- AMQP Configuration -->
+    <rabbit:connection-factory id="connectionFactory" host="localhost" />
+
+    <rabbit:template id="amqpTemplate" connection-factory="connectionFactory" />
+
+    <rabbit:admin connection-factory="connectionFactory" />
+
+    <rabbit:queue name="si.test.queue" />
+
+    <rabbit:direct-exchange name="si.test.exchange">
+        <rabbit:bindings>
+            <rabbit:binding queue="si.test.queue" key="si.test.binding" />
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
 
 </beans>

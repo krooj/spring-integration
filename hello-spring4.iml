@@ -12,6 +12,8 @@
       <configuration>
         <fileset id="fileset" name="Spring Application Context" removed="false">
           <file>file://$MODULE_DIR$/src/main/resources/integration-context.xml</file>
+          <file>file://$MODULE_DIR$/src/main/java/com/krooj/config/AppConfig.java</file>
+          <file>file://$MODULE_DIR$/src/main/java/com/krooj/config/MvcConfig.java</file>
         </fileset>
       </configuration>
     </facet>
