@@ -29,10 +29,15 @@
 
     <int:channel id="amqpInboundChannel"/>
 
+    <int:channel id="routerChannel"/>
+
     <int:channel id="splitterInputChannel"/>
 
     <int:channel id="lineItemProcessingChannel"/>
 
+    <int:channel id="stdoutChannel"/>
+
+    <int:channel id="twitterChannel"/>
 
     <!-- Poll the target directory every 5 seconds for a file with the *csv extension -->
     <int-file:inbound-channel-adapter id="filePoller"
@@ -54,8 +59,18 @@
     <int:splitter input-channel="splitterInputChannel" output-channel="lineItemProcessingChannel" ref="csvSplitter" method="split"/>
 
     <int:transformer input-channel="lineItemProcessingChannel"
-                     output-channel="amqpInboundChannel"
+                     output-channel="routerChannel"
                      ref="lineItemMessageTransformer"/>
+
+    <int:router input-channel="routerChannel" expression="payload.destination">
+        <int:mapping value="TWITTER" channel="twitterChannel"/>
+        <int:mapping value="STDOUT" channel="stdoutChannel"/>
+    </int:router>
+
+    <int:service-activator
+        input-channel="stdoutChannel"
+        ref="stdoutShoutOutServiceImpl"
+        method="handle"/>
 
     <int-amqp:outbound-channel-adapter
             channel="amqpOutboundChannel" amqp-template="amqpTemplate" exchange-name="${rabbitmq.exchangename}"
@@ -65,7 +80,14 @@
             channel="amqpInboundChannel"
             queue-names="${rabbitmq.queuename}" connection-factory="connectionFactory" message-converter="jackson2JsonMessageConverter"/>
 
-    <int:service-activator input-channel="amqpInboundChannel" ref="shoutOutServiceImpl" method="handle"/>
+    <int:router
+        input-channel="amqpInboundChannel"
+        expression="payload.destination">
+        <int:mapping value="TWITTER" channel="twitterChannel"/>
+        <int:mapping value="STDOUT" channel="stdoutChannel"/>
+    </int:router>
+
+    <int:service-activator input-channel="twitterChannel" ref="twitterShoutOutService" method="handle"/>
 
     <!-- AMQP Configuration -->
 

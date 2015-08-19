@@ -11,15 +11,15 @@ import twitter4j.TwitterException;
 /**
  * Created by krooj on 8/18/15.
  */
-@Service
-public class ShoutOutServiceImpl implements ShoutOutService {
+@Service("twitterShoutOutService")
+public class TwitterShoutOutServiceImpl implements ShoutOutService {
 
-    Logger LOGGER = LoggerFactory.getLogger(ShoutOutServiceImpl.class);
+    Logger LOGGER = LoggerFactory.getLogger(TwitterShoutOutServiceImpl.class);
 
     private Twitter twitter;
 
     @Autowired
-    public ShoutOutServiceImpl(Twitter twitter) {
+    public TwitterShoutOutServiceImpl(Twitter twitter) {
         this.twitter = twitter;
     }
 
