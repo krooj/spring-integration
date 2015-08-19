@@ -3,29 +3,41 @@
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
        xmlns:int="http://www.springframework.org/schema/integration"
        xmlns:int-file="http://www.springframework.org/schema/integration/file"
+       xmlns:rabbit="http://www.springframework.org/schema/rabbit"
        xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:int-amqp="http://www.springframework.org/schema/integration/amqp"
        xsi:schemaLocation="http://www.springframework.org/schema/beans
            http://www.springframework.org/schema/beans/spring-beans.xsd
            http://www.springframework.org/schema/integration
            http://www.springframework.org/schema/integration/spring-integration.xsd
            http://www.springframework.org/schema/integration/file
            http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+           http://www.springframework.org/schema/rabbit
+           http://www.springframework.org/schema/rabbit/spring-rabbit.xsd
            http://www.springframework.org/schema/context
-           http://www.springframework.org/schema/context/spring-context.xsd">
+           http://www.springframework.org/schema/context/spring-context.xsd
+           http://www.springframework.org/schema/integration/amqp
+           http://www.springframework.org/schema/integration/amqp/spring-integration-amqp.xsd">
 
     <context:component-scan base-package="com.krooj"/>
+    <context:property-placeholder location="classpath*:application.properties"/>
 
     <!-- Defines a logical channel for the input messages -->
     <int:channel id="fileInputChannel"/>
 
-    <!-- Define a channel, backed by a queue, onto which to place the un-marshalled messages -->
-    <int:channel id="convertedMessageChannel">
-        <int:queue/>
-    </int:channel>
+    <int:channel id="amqpOutboundChannel"/>
 
-    <int:channel id="lineItemProcessingChannel">
-    </int:channel>
+    <int:channel id="amqpInboundChannel"/>
 
+    <int:channel id="routerChannel"/>
+
+    <int:channel id="splitterInputChannel"/>
+
+    <int:channel id="lineItemProcessingChannel"/>
+
+    <int:channel id="stdoutChannel"/>
+
+    <int:channel id="twitterChannel"/>
 
     <!-- Poll the target directory every 5 seconds for a file with the *csv extension -->
     <int-file:inbound-channel-adapter id="filePoller"
@@ -38,17 +50,53 @@
     </int-file:inbound-channel-adapter>
 
 
-    <int:splitter input-channel="fileInputChannel"
-                  output-channel="lineItemProcessingChannel"
-                  expression="T(org.apache.commons.io.FileUtils).lineIterator(payload)">
-    </int:splitter>
+    <int:service-activator
+            input-channel="fileInputChannel"
+            output-channel="splitterInputChannel"
+            ref="batchServiceImpl"
+            method="processInitialFile"/>
+
+    <int:splitter input-channel="splitterInputChannel" output-channel="lineItemProcessingChannel" ref="csvSplitter" method="split"/>
 
     <int:transformer input-channel="lineItemProcessingChannel"
-                     output-channel="convertedMessageChannel"
+                     output-channel="routerChannel"
                      ref="lineItemMessageTransformer"/>
 
-    <int:service-activator ref="shoutOutService" method="handle" input-channel="convertedMessageChannel">
-        <int:poller cron="0/5 * * * * ?"/>
-    </int:service-activator>
+    <int:router input-channel="routerChannel" expression="payload.destination">
+        <int:mapping value="TWITTER" channel="twitterChannel"/>
+        <int:mapping value="STDOUT" channel="stdoutChannel"/>
+    </int:router>
+
+    <int:service-activator
+        input-channel="stdoutChannel"
+        ref="stdoutShoutOutServiceImpl"
+        method="handle"/>
+
+    <int-amqp:outbound-channel-adapter
+            channel="amqpOutboundChannel" amqp-template="amqpTemplate" exchange-name="${rabbitmq.exchangename}"
+            routing-key="${rabbitmq.binding}"/>
+
+    <int-amqp:inbound-channel-adapter
+            channel="amqpInboundChannel"
+            queue-names="${rabbitmq.queuename}" connection-factory="connectionFactory" message-converter="jackson2JsonMessageConverter"/>
+
+    <int:router
+        input-channel="amqpInboundChannel"
+        expression="payload.destination">
+        <int:mapping value="TWITTER" channel="twitterChannel"/>
+        <int:mapping value="STDOUT" channel="stdoutChannel"/>
+    </int:router>
+
+    <int:service-activator input-channel="twitterChannel" ref="twitterShoutOutService" method="handle"/>
+
+    <!-- AMQP Configuration -->
+
+    <rabbit:queue name="${rabbitmq.queuename}"/>
+
+    <rabbit:direct-exchange name="${rabbitmq.exchangename}">
+        <rabbit:bindings>
+            <rabbit:binding queue="${rabbitmq.queuename}" key="${rabbitmq.binding}"/>
+        </rabbit:bindings>
+    </rabbit:direct-exchange>
 
 </beans>

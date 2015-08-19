@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class LineItemMessageTransformer {
 
-
     @Transformer
     public ShoutOut createShoutOut(String messageLine) {
         return ShoutOut.messageLine2ShoutOut(messageLine);

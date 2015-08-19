@@ -7,11 +7,18 @@ import java.util.*;
  */
 public class ShoutOut {
 
+    public enum Destination{
+        TWITTER,
+        STDOUT
+    }
+
     private String sender;
 
     private String recipient;
 
     private String message;
+
+    private Destination destination;
 
     public String getSender() {
         return sender;
@@ -37,6 +44,14 @@ public class ShoutOut {
         this.message = message;
     }
 
+    public Destination getDestination() {
+        return destination;
+    }
+
+    public void setDestination(Destination destination) {
+        this.destination = destination;
+    }
+
     public static ShoutOut messageLine2ShoutOut(String messageLine){
         StringTokenizer stringTokenizer = new StringTokenizer(messageLine,",");
         Map<String, String> objectMap = new TreeMap<>();
@@ -59,6 +74,8 @@ public class ShoutOut {
                 case "message":
                     shoutOut.setMessage(objectMap.get(key));
                     break;
+                case "destination":
+                    shoutOut.setDestination(Destination.valueOf(objectMap.get(key)));
                 default:
                     break;
             }
@@ -72,6 +89,7 @@ public class ShoutOut {
                 "sender='" + sender + '\'' +
                 ", recipient='" + recipient + '\'' +
                 ", message='" + message + '\'' +
+                ", destination=" + destination +
                 '}';
     }
 }
