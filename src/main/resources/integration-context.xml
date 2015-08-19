@@ -20,6 +20,7 @@
            http://www.springframework.org/schema/integration/amqp/spring-integration-amqp.xsd">
 
     <context:component-scan base-package="com.krooj"/>
+    <context:property-placeholder location="classpath*:application.properties"/>
 
     <!-- Defines a logical channel for the input messages -->
     <int:channel id="fileInputChannel"/>
@@ -28,8 +29,9 @@
 
     <int:channel id="amqpInboundChannel"/>
 
-    <int:channel id="lineItemProcessingChannel">
-    </int:channel>
+    <int:channel id="splitterInputChannel"/>
+
+    <int:channel id="lineItemProcessingChannel"/>
 
 
     <!-- Poll the target directory every 5 seconds for a file with the *csv extension -->
@@ -43,37 +45,35 @@
     </int-file:inbound-channel-adapter>
 
 
-    <int:splitter input-channel="fileInputChannel"
-                  output-channel="lineItemProcessingChannel"
-                  expression="T(org.apache.commons.io.FileUtils).lineIterator(payload)">
-    </int:splitter>
+    <int:service-activator
+            input-channel="fileInputChannel"
+            output-channel="splitterInputChannel"
+            ref="batchServiceImpl"
+            method="processInitialFile"/>
+
+    <int:splitter input-channel="splitterInputChannel" output-channel="lineItemProcessingChannel" ref="csvSplitter" method="split"/>
 
     <int:transformer input-channel="lineItemProcessingChannel"
                      output-channel="amqpInboundChannel"
                      ref="lineItemMessageTransformer"/>
 
     <int-amqp:outbound-channel-adapter
-            channel="amqpOutboundChannel" amqp-template="amqpTemplate" exchange-name="si.test.exchange"
-            routing-key="si.test.binding" />
+            channel="amqpOutboundChannel" amqp-template="amqpTemplate" exchange-name="${rabbitmq.exchangename}"
+            routing-key="${rabbitmq.binding}"/>
 
     <int-amqp:inbound-channel-adapter
-        channel="amqpInboundChannel"
-        queue-names="si.test.queue" connection-factory="connectionFactory" />
+            channel="amqpInboundChannel"
+            queue-names="${rabbitmq.queuename}" connection-factory="connectionFactory" message-converter="jackson2JsonMessageConverter"/>
 
-    <int:service-activator input-channel="amqpInboundChannel" ref="shoutOutService" method="handle"/>
+    <int:service-activator input-channel="amqpInboundChannel" ref="shoutOutServiceImpl" method="handle"/>
 
     <!-- AMQP Configuration -->
-    <rabbit:connection-factory id="connectionFactory" host="localhost" />
 
-    <rabbit:template id="amqpTemplate" connection-factory="connectionFactory" />
+    <rabbit:queue name="${rabbitmq.queuename}"/>
 
-    <rabbit:admin connection-factory="connectionFactory" />
-
-    <rabbit:queue name="si.test.queue" />
-
-    <rabbit:direct-exchange name="si.test.exchange">
+    <rabbit:direct-exchange name="${rabbitmq.exchangename}">
         <rabbit:bindings>
-            <rabbit:binding queue="si.test.queue" key="si.test.binding" />
+            <rabbit:binding queue="${rabbitmq.queuename}" key="${rabbitmq.binding}"/>
         </rabbit:bindings>
     </rabbit:direct-exchange>
 
